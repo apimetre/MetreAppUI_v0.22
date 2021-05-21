@@ -411,55 +411,48 @@ class MainView(ui.View):
         
         for file in files:
                if fnmatch.fnmatch(file, '*.json'):
-
-                   dt = datetime.datetime.fromtimestamp(int(file.split('-')[0])).astimezone(timezone(tz)).strftime('%b %d, %Y, %I:%M %p')
-                   ui.animate(self.blink, 0.1)
-                   if DEBUG:
-                       print('Beginning Analysis of test from ' + dt)
-                   json_path = source_path + '/'+ file
-                   process_done = False
-                   with open(json_path) as f:
-                       data_dict = json.load(f)
-                   data_dict_to_send = process_test.process(data_dict, dt, DEBUG)
-                   url = 'https://us-central1-metre3-1600021174892.cloudfunctions.net/metre-7500'
-                   data_dict_to_send['App_Version'] = APP_VERSION
-                   json_text = json.dumps(data_dict_to_send)
-                   self.app_console.text = 'Uploading and interpreting results from test from your ' + dt +' test. This may take a few moments...'
-                   pt = threading.Thread(target = animate_bar) # don't do this unless u start a parallel thread to send request
-                   pt.start()
-                   if DEBUG:
-                       print('sending to cloud')
-                   start = time.time()
-                   response = requests.post(url, files = [('json_file', ('test.json', json_text, 'application/json'))])
-                   process_done = True
-                   elapsedtime = time.time()-start
-                   if DEBUG: 
-                       print('received response--response time ' + str(elapsedtime))
-                   response_json = json.loads(response.text)
-                   pt.join()
-                   process_done = True
-                   print(response_json)
-                   self.app_console.text = 'Results from ' + dt + ': ' + response_json['pred_content']
-                   if DEBUG:
-                        print(response_json['pred_content'])
-                   print(response_json)
-                   newlog = {'Etime': response_json['refnum'],
-                              'DateTime': response_json['DateTime'],
-                              'Acetone': float(response_json['Acetone']),
-                              'Sensor': response_json['sensor'],
-                              'Instr': response_json['instrument'],
-                              'Notes': '',
-                              'Key': ''}
-                   for key, value in self.log.items():
-                      self.log[key].append(newlog[key])
-                   with open(self.cwd + "/log/log_003.json", "w") as outfile:
-                      json.dump(self.log, outfile)
-                   self.getData()
-                   if DEBUG:
-                        print(self.acetone)
-                   self.results_table = self.v['results_table']
-                   self.restable_inst.update_table()                        
-
+                   try:
+                       data_dict_to_send = process_test.process(data_dict, dt, DEBUG)
+                       url = 'https://us-central1-metre3-1600021174892.cloudfunctions.net/metre-7500'
+                       data_dict_to_send['App_Version'] = APP_VERSION
+                       json_text = json.dumps(data_dict_to_send)
+                       self.app_console.text = 'Uploading and interpreting results from test from your ' + dt +' test. This may take a few moments...'
+                       pt = threading.Thread(target = animate_bar) # don't do this unless u start a parallel thread to send request
+                       pt.start()
+                       if DEBUG:
+                           print('sending to cloud')
+                       start = time.time()
+                       response = requests.post(url, files = [('json_file', ('test.json', json_text, 'application/json'))])
+                       process_done = True
+                       elapsedtime = time.time()-start
+                       if DEBUG: 
+                           print('received response--response time ' + str(elapsedtime))
+                       response_json = json.loads(response.text)
+                       pt.join()
+                       process_done = True
+                       
+                       self.app_console.text = 'Results from ' + dt + ': ' + response_json['pred_content']
+                       if DEBUG:
+                            print(response_json['pred_content'])
+                       newlog = {'Etime': response_json['refnum'],
+                                  'DateTime': response_json['DateTime'],
+                                  'Acetone': float(response_json['Acetone']),
+                                  'Sensor': response_json['sensor'],
+                                  'Instr': response_json['instrument'],
+                                  'Notes': '',
+                                  'Key': ''}
+                       for key, value in self.log.items():
+                          self.log[key].append(newlog[key])
+                       with open(self.cwd + "/log/log_003.json", "w") as outfile:
+                          json.dump(self.log, outfile)
+                       self.getData()
+                       if DEBUG:
+                            print(self.acetone)
+                       self.results_table = self.v['results_table']
+                       self.restable_inst.update_table()                        
+                   except:
+                       self.app_console.text = 'The test from ' + dt + ' could not be processed.'
+                       time.sleep(1)
                    shutil.move(source_path + file, self.cwd +'/data_files/processed_files/' + file)
                else:
                    continue
