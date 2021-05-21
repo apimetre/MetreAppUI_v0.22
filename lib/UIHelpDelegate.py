@@ -35,7 +35,7 @@ class HelpDelegate(object):
             
                           
     def helpView(self, sender):
-        instructions_url = 'https://www.metre.ai/resources/metreui/install_instructions'
+        instructions_url = 'https://www.metre.ai/resources/metreui/instrument_instructions'
         
         helpWindow = ui.WebView()
         helpWindow.tint_color = 'red'
