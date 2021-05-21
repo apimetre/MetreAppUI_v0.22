@@ -188,9 +188,8 @@ class MainView(ui.View):
                     
                 if sender.title=='Settings':
                     settings_page = pushed_view['view1']
-                    s_table=settings_page['tableview1']
                     d_table = settings_page['dt_table']
-                    ble_delegate = BleDelegate(settings_page, s_table, d_table, self.cwd)
+                    ble_delegate = BleDelegate(settings_page, d_table, self.cwd)
                     
                 if sender.title=='Results':
                     results_page = pushed_view['bokeh_bg']
