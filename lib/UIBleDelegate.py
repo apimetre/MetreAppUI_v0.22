@@ -100,7 +100,7 @@ class BokehDelegate(object):
         
         
 class BleDelegate(object):
-	def __init__(self, subview_, table_, dt_table_, cwd_):
+	def __init__(self, subview_, dt_table_, cwd_):
 		self.subview = subview_
 		#self.table = table_
 		#self.table_items = ['Device1', 'Device2', 'Device3']
