@@ -292,9 +292,7 @@ class BleUploader():
                  ble_icon_path = 'images/ble_off.png'
                  self.ble_status_icon_.image = ui.Image.named(ble_icon_path)
                  self.ble_status_icon_.background_color = 'black'
-                 #out_msg2 =json.dumps({"cmd": "disconnect_ble"})
-                 #rstring, no_counter = cmd_fn(out_msg2)
-                 return False
+                 return False, orig_results_table_loc
             self.console_box_.text = str(list_of_dirs)
 
             file_list = []
@@ -316,164 +314,171 @@ class BleUploader():
             FLAG = False
             file_wrongsize = []
             first_alert = True
-            for file in list_of_dirs:
-                
-                timeout_counter = 1
-                if file.startswith('._'):
-                    if self.DEBUG:
-                        print('I SEE ' + file)
-                    out_msg_del_e =json.dumps({"cmd": "remove", "path":     "/sd/" + file})
-                    r_del, counter = cmd_fn(out_msg_del_e, "remove", warning = True, to_max = 150)
-                elif file.endswith(('.bin', '.json')):
-                    if "device" in file:
+            try:
+                for file in list_of_dirs:
+                    
+                    timeout_counter = 1
+                    if file.startswith('._'):
                         if self.DEBUG:
                             print('I SEE ' + file)
-                            print('Skipping over ' + file)
-                        continue
-                    elif "params" in file:
-                        if self.DEBUG:
-                            print('I SEE ' + file)
-                            print('Skipping over ' + file)
-                        continue
-                    else:
-                        if self.DEBUG:
-                            print('I SEE ' + file)
-                        file_ix = list_of_dirs.index(file)
-                        file_size = file_sizes[file_ix]
-                        try:
-                            self.console_box_.text =  'Fetching ' + str(file_list.index(file) + 1) + ' out of ' + str(len(file_list)) + ' test files from your MetreAce'
-                        except:
-                            pass
-                        if file.endswith('.bin'):
-                            counter = 1
-                        filename, ext = file.split('.')
-                        if int(filename) < 1614306565 and first_alert:
-                            ConsoleAlert('Warning: May need to replace clock battery!', self.v_)
-                            first_alert = False
-                        
-                        out_msg =json.dumps({"cmd": "ble_get_file", "path":     "/sd/" + file})
-                        in_buf = (out_msg + '\n').encode('utf-8')
-                        result_resp = []
-                        while self.py_ble_uart.peripheral:
+                        out_msg_del_e =json.dumps({"cmd": "remove", "path":     "/sd/" + file})
+                        r_del, counter = cmd_fn(out_msg_del_e, "remove", warning = True, to_max = 150)
+                    elif file.endswith(('.bin', '.json')):
+                        if "device" in file:
+                            if self.DEBUG:
+                                print('I SEE ' + file)
+                                print('Skipping over ' + file)
+                            continue
+                        elif "params" in file:
+                            if self.DEBUG:
+                                print('I SEE ' + file)
+                                print('Skipping over ' + file)
+                            continue
+                        else:
+                            if self.DEBUG:
+                                print('I SEE ' + file)
+                            file_ix = list_of_dirs.index(file)
+                            file_size = file_sizes[file_ix]
                             try:
-                                if len(in_buf):
-                                    in_chars = in_buf
-                                    self.py_ble_buffer.buffer(in_chars)
-                                    in_buf = ''
-                                if len(self.event_queue):
-                                    event = self.event_queue.pop()
-
-                                    if 'post' in event:
-                                        try:
-                                            response = json.loads(event['post'])
-                                            if 'cmd' in response:
-                                                self.py_ble_uart.write((event    ['post']+'\n').encode())
-                                                self.print_wrap(f"cmd_event: {event}",   self.INDENT_STR, self.CONSOLE_WIDTH)
-                                            else:
-                                                self.print_wrap(f"no_cmd_event: {response}",    self.INDENT_STR, self.CONSOLE_WIDTH)
-                                                if response['ok']:
-                                                    try:
-                                                         result_resp.append(str(response['resp']))
-                                                         self.print_wrap(f"resp_event: {response}",   self.INDENT_STR, self.CONSOLE_WIDTH)
-                                                    except:
-                                                        result_resp.append(str(response['ack']))
-                                                        self.print_wrap(f"ack_event: {response}",   self.INDENT_STR, self.CONSOLE_WIDTH)
-                                                else:
-                                                    if self.DEBUG:
-                                                        print("RESPONSE IS NOT OKAY")
-                                                    break
-                                        except:
-                                            pass
-    
-                                    else:
-                                        if self.DEBUG:
-                                            print(str(event))
-                                        #response = json.loads(str(event))
-                                        if event['ok']:
-                                           self.print_wrap(f"event: {event}",   self.INDENT_STR, self.CONSOLE_WIDTH)
-                                           pass
-                                        else:
-                                           FLAG = True
-                                           self.print_wrap(f"event: {event}",    self.INDENT_STR, self.CONSOLE_WIDTH)
-                                           break
-                                        
-                                time.sleep(0.2)
-                                ui.animate(self.blink, 0.1)
-                                counter = counter + 1
-                                timeout_counter = timeout_counter + 1
-                                if timeout_counter > 2000:
-                                    self.console_box_.text = "One of your tests could not be processed"
-                                    break
-                                
-                            except KeyboardInterrupt as e:
-                                cb.reset()
-                                print(f"Ctrl-C Exiting: {e}")
-                                break
-                           
-                            if "{'file_path': './result.bin'}" in result_resp:
-                                if self.DEBUG:
-                                    print('ENTERING TRANSFER AND REMOVAL ATTEMPT')
-                               
+                                self.console_box_.text =  'Fetching ' + str(file_list.index(file) + 1) + ' out of ' + str(len(file_list)) + ' test files from your MetreAce'
+                            except:
+                                pass
+                            if file.endswith('.bin'):
+                                counter = 1
+                            filename, ext = file.split('.')
+                            if int(filename) < 1614306565 and first_alert:
+                                ConsoleAlert('Warning: May need to replace clock battery!', self.v_)
+                                first_alert = False
+                            
+                            out_msg =json.dumps({"cmd": "ble_get_file", "path":     "/sd/" + file})
+                            in_buf = (out_msg + '\n').encode('utf-8')
+                            result_resp = []
+                            while self.py_ble_uart.peripheral:
                                 try:
-                                    shutil.move('./result.bin', self.base_dir + '/data_files/uploaded_files/' + file)
-                                    upload_size = os.stat(self.base_dir + '/data_files/uploaded_files/' + file)[6]
-                                    if self.DEBUG:
-                                        print('Sent move command')
-                                    if upload_size == file_size:
-                                        if self.DEBUG:
-                                            print('upload and file size are the same size')
-                                        out_msg_del =json.dumps({"cmd": "remove", "path":"/sd/" + file})
-                                        r_del, counter = cmd_fn(out_msg_del, "remove",cmd_counter = counter, warning = True)  
-                                        if self.DEBUG:
-                                            print('Sent remove command here')
-                                    else:
-                                        if self.DEBUG:
-                                            print('FILE IS THE WRONG SIZE')
-                                        size_diff = file_size - upload_size
-                                        file_wrongsize.append(file)
-                                        file_wrongsize.append(size_diff)
-                                        out_msg_del =json.dumps({"cmd": "remove", "path":"/sd/" + file})
-                                        r_del, counter = cmd_fn(out_msg_del, "remove", cmd_counter = counter, warning = True)
+                                    if len(in_buf):
+                                        in_chars = in_buf
+                                        self.py_ble_buffer.buffer(in_chars)
+                                        in_buf = ''
+                                    if len(self.event_queue):
+                                        event = self.event_queue.pop()
+    
+                                        if 'post' in event:
+                                            try:
+                                                response = json.loads(event['post'])
+                                                if 'cmd' in response:
+                                                    self.py_ble_uart.write((event    ['post']+'\n').encode())
+                                                    self.print_wrap(f"cmd_event: {event}",   self.INDENT_STR, self.CONSOLE_WIDTH)
+                                                else:
+                                                    self.print_wrap(f"no_cmd_event: {response}",    self.INDENT_STR, self.CONSOLE_WIDTH)
+                                                    if response['ok']:
+                                                        try:
+                                                             result_resp.append(str(response['resp']))
+                                                             self.print_wrap(f"resp_event: {response}",   self.INDENT_STR, self.CONSOLE_WIDTH)
+                                                        except:
+                                                            result_resp.append(str(response['ack']))
+                                                            self.print_wrap(f"ack_event: {response}",   self.INDENT_STR, self.CONSOLE_WIDTH)
+                                                    else:
+                                                        if self.DEBUG:
+                                                            print("RESPONSE IS NOT OKAY")
+                                                        break
+                                            except:
+                                                pass
+        
+                                        else:
+                                            if self.DEBUG:
+                                                print(str(event))
+                                            #response = json.loads(str(event))
+                                            if event['ok']:
+                                               self.print_wrap(f"event: {event}",   self.INDENT_STR, self.CONSOLE_WIDTH)
+                                               pass
+                                            else:
+                                               FLAG = True
+                                               self.print_wrap(f"event: {event}",    self.INDENT_STR, self.CONSOLE_WIDTH)
+                                               break
+                                            
+                                    time.sleep(0.2)
+                                    ui.animate(self.blink, 0.1)
+                                    counter = counter + 1
+                                    timeout_counter = timeout_counter + 1
+                                    if timeout_counter > 2000:
+                                        self.console_box_.text = "One of your tests could not be processed"
+                                        break
                                     
-                                    if file.endswith('bin'):
-                                        counter = counter + 1
-                                    
-                                        break 
-                                        # No break and no continue makes it exit and not remove the bin file
-                                    elif file.endswith('json'):
-                                        pass
-                                        
-                                except:
-                                    if self.DEBUG:
-                                        print('BROKE OUT OF TRANSFER AND REMOVAL ATTEMPT')
+                                except KeyboardInterrupt as e:
+                                    cb.reset()
+                                    print(f"Ctrl-C Exiting: {e}")
                                     break
-                        if FLAG:
-                           counter = 0
-                           cb.reset()
-                           return False
-                       
-                else:
-                    continue
-            # Now use FileConverter
-            fc = FileConverter(self.console_box_, file_wrongsize)
-            cwd = os.getcwd()
-            if self.DEBUG:
-                print('THIS IS THE CURRENT DIR: ' + cwd)
-                print('THIS IS SELF.BASEDIR: ' + self.base_dir)
-
-            conversion_status = fc.match_files(self.base_dir + '/data_files/uploaded_files', self.base_dir + '/data_files/processed_files', self.base_dir + '/data_files/converted_files', self.base_dir + '/data_files/unpaired_files')
-            self.console_box_.text = 'Transfer of ' + str(len(file_list)) + ' out of ' + str(len(file_list)) + ' test files complete'
-            
-            self.ble_status_icon_.background_color = 'white'
-            self.v_['ble_status'].text = ''
-            self.d0.alpha =  0
-            self.d1.alpha =  0
-            self.d2.alpha =  0
-            self.d3.alpha =  0
-            self.d4.alpha =  0
-
-            self.instr_icon.alpha = 0.2
-            
+                               
+                                if "{'file_path': './result.bin'}" in result_resp:
+                                    if self.DEBUG:
+                                        print('ENTERING TRANSFER AND REMOVAL ATTEMPT')
+                                   
+                                    try:
+                                        shutil.move('./result.bin', self.base_dir + '/data_files/uploaded_files/' + file)
+                                        upload_size = os.stat(self.base_dir + '/data_files/uploaded_files/' + file)[6]
+                                        if self.DEBUG:
+                                            print('Sent move command')
+                                        if upload_size == file_size:
+                                            if self.DEBUG:
+                                                print('upload and file size are the same size')
+                                            out_msg_del =json.dumps({"cmd": "remove", "path":"/sd/" + file})
+                                            r_del, counter = cmd_fn(out_msg_del, "remove",cmd_counter = counter, warning = True)  
+                                            if self.DEBUG:
+                                                print('Sent remove command here')
+                                        else:
+                                            if self.DEBUG:
+                                                print('FILE IS THE WRONG SIZE')
+                                            size_diff = file_size - upload_size
+                                            file_wrongsize.append(file)
+                                            file_wrongsize.append(size_diff)
+                                            out_msg_del =json.dumps({"cmd": "remove", "path":"/sd/" + file})
+                                            r_del, counter = cmd_fn(out_msg_del, "remove", cmd_counter = counter, warning = True)
+                                        
+                                        if file.endswith('bin'):
+                                            counter = counter + 1
+                                        
+                                            break 
+                                            # No break and no continue makes it exit and not remove the bin file
+                                        elif file.endswith('json'):
+                                            pass
+                                            
+                                    except:
+                                        if self.DEBUG:
+                                            print('BROKE OUT OF TRANSFER AND REMOVAL ATTEMPT')
+                                        break
+                            if FLAG:
+                               counter = 0
+                               cb.reset()
+                               return False
+                           
+                    else:
+                        continue
+                # Now use FileConverter
+                fc = FileConverter(self.console_box_, file_wrongsize)
+                cwd = os.getcwd()
+                if self.DEBUG:
+                    print('THIS IS THE CURRENT DIR: ' + cwd)
+                    print('THIS IS SELF.BASEDIR: ' + self.base_dir)
+    
+                conversion_status = fc.match_files(self.base_dir + '/data_files/uploaded_files', self.base_dir + '/data_files/processed_files', self.base_dir + '/data_files/converted_files', self.base_dir + '/data_files/unpaired_files')
+                self.console_box_.text = 'Transfer of ' + str(len(file_list)) + ' out of ' + str(len(file_list)) + ' test files complete'
+                
+                self.ble_status_icon_.background_color = 'white'
+                self.v_['ble_status'].text = ''
+                self.d0.alpha =  0
+                self.d1.alpha =  0
+                self.d2.alpha =  0
+                self.d3.alpha =  0
+                self.d4.alpha =  0
+    
+                self.instr_icon.alpha = 0.2
+            ########################################
+            except:    
+                 ConsoleAlert('Connection Error! Remove Mouthpiece, Close App, Try Again!', self.v_)
+                 ble_icon_path = 'images/ble_off.png'
+                 self.ble_status_icon_.image = ui.Image.named(ble_icon_path)
+                 self.ble_status_icon_.background_color = 'black'
+                 return False, orig_results_table_loc
             try:
                 out_msg_txt =json.dumps({"cmd":"set_ble_state","active":False})
                 cmd_fn(out_msg_txt, "set_ble_state", warning = True, to_max = 15)
