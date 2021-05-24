@@ -165,6 +165,7 @@ class MainView(ui.View):
             print("this is the size of files to upload")
             print(len(self.files_to_upload))
         if len(self.files_to_upload) >=2:
+        
             self.app_console.text = 'Beginning Upload'
             self.main()
             self.star_button.alpha = 0.5
@@ -241,7 +242,8 @@ class MainView(ui.View):
                 # HERE is where you trigger the main function (i.e. after the button is pushed)
                 self.calc_icon.alpha = 0.7
                 self.main()
-                self.connect_button.alpha = 0.7
+                #self.connect_button.alpha = 0.7
+                #self.star_button.alpha = 0.7
                 return done
             else:
                 self.app_console.text = 'No breath tests are ready to be processed'
@@ -369,7 +371,9 @@ class MainView(ui.View):
         if self.results_table.y == self.orig_console_loc:
             self.results_table.y = (self.results_table.y - self.app_console.height/2)/(2*self.xscaler)
         self.ble_status.alpha = 0.75 
-        self.calc_icon.apha = 0.7
+        
+        self.star_button.alpha = 0.75
+        self.calc_icon.alpha = 0.75
         global process_done
         process_done = False
         
