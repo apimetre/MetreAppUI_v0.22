@@ -146,11 +146,7 @@ class MainView(ui.View):
         self.getData()
         self.results_table = self.v['results_table']
         self.orig_results_table_loc = self.results_table.y
-        print('this is the original results_table_loc')
 
-        print(self.orig_results_table_loc)
-        print('this is the original results table.y')
-        print(self.results_table.y)
         if self.xscaler > 2:
             self.results_table.width = self.results_table.width/(self.xscaler/2)
             self.results_table.x = self.star_button.x/2 + self.results_table.width/(4*2) - self.star_button.width/8
@@ -383,12 +379,8 @@ class MainView(ui.View):
         self.calc_icon.alpha = 0.75
         if direct:
             fixed_loc = self.results_table.y
-            print('going directly')
-            print(fixed_loc)
         else:
             fixed_loc = self.orig_results_table_loc
-            print('NOT going directly')
-            print(fixed_loc)
         global process_done
         process_done = False
         
@@ -411,11 +403,9 @@ class MainView(ui.View):
             print("these are the files in converted_files: " + str(files))
         numOfFiles = len(files)
         self.app_console.alpha = 1
-        print('BEFORE THE MOVE THE RESULTS_TABLE.Y IS ' + str(self.results_table.y))
         if numOfFiles >1:
             if self.results_table.y == fixed_loc:           
                 self.results_table.y = self.results_table.y/(2*self.xscaler) + self.app_console.height/2
-                print('moving to ' + str(self.results_table.y))
             self.app_console.text = str(numOfFiles) + ' breath tests are ready to be processed. Beginning data processing...'
             self.d5.alpha = 0.75
         elif numOfFiles == 1:
@@ -510,13 +500,9 @@ class MainView(ui.View):
         time.sleep(2.5)
         self.app_console.alpha = 0
         self.app_console.text = ''
-        print('this is the original results_table_loc')
-        print(self.orig_results_table_loc)
-        print('this is resutls_table_y')
-        print(self.results_table.y)
+
         if self.results_table.y != fixed_loc:
             self.results_table.y = fixed_loc
-            print('moving bc not equal the fixed_loc is ' + str(fixed_loc))
         self.connect_button.action = self.bleStatus()
         self.ble_status.alpha = 1
         
@@ -546,3 +532,4 @@ if __name__ == '__main__':
         nav_class.mainscript.init_check()
         self.connect_button.action = self.bleStatus()
         self.ble_status.alpha = 1
+
