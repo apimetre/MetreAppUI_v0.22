@@ -100,9 +100,9 @@ class ResultsTable(object):
         self.acetone_str = []
         for val in self.acetone:
             if float(val) < 2:
-                self.acetone_str.append(1)
+                self.acetone_str.append("< 2")
             else:
-                self.acetone_str.append(val)
+                self.acetone_str.append(str(round(val,1)))
         ###################################################################################        
         
         new_sorted_etime = sorted(list(self.etime)) # This is the sorted version of self.log['Etime']
