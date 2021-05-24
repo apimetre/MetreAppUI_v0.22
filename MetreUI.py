@@ -455,11 +455,11 @@ class MainView(ui.View):
                           self.log[key].append(newlog[key])
                        with open(self.cwd + "/log/log_003.json", "w") as outfile:
                           json.dump(self.log, outfile)
-                           self.getData()
-                           if DEBUG:
-                                print(self.acetone)
-                           self.results_table = self.v['results_table']
-                           self.restable_inst.update_table()                        
+                       self.getData()
+                       if DEBUG:
+                          print(self.acetone)
+                       self.results_table = self.v['results_table']
+                       self.restable_inst.update_table()                        
                    except:
                        self.app_console.text = 'The test from ' + dt + ' could not be processed.'
                        time.sleep(1)
