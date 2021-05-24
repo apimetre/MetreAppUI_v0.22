@@ -1,4 +1,4 @@
-# Python imports
+ Python imports
 import requests
 from io import BytesIO
 import datetime as datetime
@@ -64,6 +64,10 @@ def getPlot(bview, src, initial = True):
         for i in log['Etime']:
             ref_val = np.where(np.array(log['Etime']) == i)[0][0]
             sorted_dt.append(log['DateTime'][ref_val])
+            if float(log['Acetone'][ref_val]) < 2:
+                sorted_ac.append(1)
+            else:
+                sorted_ac.append(log['Acetone'][ref_val])
             sorted_ac.append(log['Acetone'][ref_val])
             sorted_instr.append(log['Instr'][ref_val])
             sorted_sensor.append(log['Sensor'][ref_val])
