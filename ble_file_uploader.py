@@ -247,43 +247,43 @@ class BleUploader():
             
         time.sleep(1)
         if self.py_ble_uart.peripheral:
-            self.v_['ble_status'].text = ''
-            print(self.console_box_.height)
-            self.v_['results_table'].y = self.v_['results_table'].y/(2*self.xscale) + self.console_box_.height/2
-            #self.console_box_.text = "Connected"
-            self.d0.alpha = 0.75
-            if self.DEBUG:
-                print('will be using ' + self.cwd + '/data_files/dat_files/ as current working directory for writing log files')
-            global counter
-            counter = 0
-            time.sleep(0.2)
-            connect_msg_txt =json.dumps({"cmd":"set_ble_state","active":True})
-            cmd_fn(connect_msg_txt, "set_ble_state")
-
-            ble_icon_path = 'images/ble_connected.png'
-            self.ble_status_icon_.image = ui.Image.named(ble_icon_path)
-            self.ble_status_icon_.background_color = "white"
-        
-        
-            #### Set the time and timezone offset (account for DST)
-            time.sleep(0.2)
-            current_time = int(time.time())
-            
-            out_msg00 =json.dumps({"cmd": "set_time","time": str(current_time)})
-            r00, no_counter = cmd_fn(out_msg00, "set_time")
-            
-            # Here is command to set timezone/DST
-            offset_hrs = calc_utc_offset(current_time)
-            time.sleep(2)
-            out_msg0 =json.dumps({"cmd": "set_time_offset","offset": str(offset_hrs)})
-            r0, no_counter = cmd_fn(out_msg0, "set_time_offset")
-            self.console_box_.text = ''
-            self.v_['ble_status'].text = 'Connected'
-            
-
-            time.sleep(0.5)
-            out_msg1 =json.dumps({"cmd": "listdir","path": "/sd"})
             try:
+                self.v_['ble_status'].text = ''
+                print(self.console_box_.height)
+                self.v_['results_table'].y = self.v_['results_table'].y/(2*self.xscale) + self.console_box_.height/2
+                #self.console_box_.text = "Connected"
+                self.d0.alpha = 0.75
+                if self.DEBUG:
+                    print('will be using ' + self.cwd + '/data_files/dat_files/ as current working directory for writing log files')
+                global counter
+                counter = 0
+                time.sleep(0.2)
+                connect_msg_txt =json.dumps({"cmd":"set_ble_state","active":True})
+                cmd_fn(connect_msg_txt, "set_ble_state")
+    
+                ble_icon_path = 'images/ble_connected.png'
+                self.ble_status_icon_.image = ui.Image.named(ble_icon_path)
+                self.ble_status_icon_.background_color = "white"
+            
+            
+                #### Set the time and timezone offset (account for DST)
+                time.sleep(0.2)
+                current_time = int(time.time())
+                
+                out_msg00 =json.dumps({"cmd": "set_time","time": str(current_time)})
+                r00, no_counter = cmd_fn(out_msg00, "set_time")
+                
+                # Here is command to set timezone/DST
+                offset_hrs = calc_utc_offset(current_time)
+                time.sleep(2)
+                out_msg0 =json.dumps({"cmd": "set_time_offset","offset": str(offset_hrs)})
+                r0, no_counter = cmd_fn(out_msg0, "set_time_offset")
+                self.console_box_.text = ''
+                self.v_['ble_status'].text = 'Connected'
+                
+    
+                time.sleep(0.5)
+                out_msg1 =json.dumps({"cmd": "listdir","path": "/sd"})
                 r1, no_counter = cmd_fn(out_msg1, "listdir",  warning = True, to_max = 120)
                 list_of_dirs = r1['dir']
                 file_sizes = r1['stat']
