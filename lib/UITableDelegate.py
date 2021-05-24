@@ -52,6 +52,16 @@ class ResultsTable(object):
                 tval = datetime.datetime.fromtimestamp(int(val))
                 self.dt_etime.append(tval)     
         self.acetone = self.log['Acetone']
+        
+        ############### This is for displaying '< 2' for acetone values < 2 ##############
+        self.acetone_str = []
+        for val in self.acetone:
+            if float(acetone) < 2:
+                self.acetone_str.append(1)
+            else:
+                self.acetone_str.append(val)
+        ###################################################################################
+        
         new_sorted_etime = sorted(list(self.etime)) # This is the sorted version of self.log['Etime']
         
         new_sorted_dt = sorted(self.dt_etime)
@@ -67,7 +77,7 @@ class ResultsTable(object):
         results = []
         self.ref_list_inv = []
         for i in dt_list:
-            results.append(i + self.spacer + str(round(self.acetone[np.where(np.array(orig_dt_list) == i)[0][0]],1)) + ' ppm ' + np.array(self.log['Key'])[np.where(np.array(orig_dt_list) == i)[0][0]])
+            results.append(i + self.spacer + str(round(self.acetone_str[np.where(np.array(orig_dt_list) == i)[0][0]],1)) + ' ppm ' + np.array(self.log['Key'])[np.where(np.array(orig_dt_list) == i)[0][0]])
             self.ref_list_inv.append(np.where(np.array(orig_dt_list) == i)[0][0])
          
         self.ref_list = list(reversed(self.ref_list_inv))
@@ -85,6 +95,16 @@ class ResultsTable(object):
                 tval = datetime.datetime.fromtimestamp(int(val))
                 self.dt_etime.append(tval)     
         self.acetone = self.log['Acetone']
+        
+        ############### This is for displaying '< 2' for acetone values < 2 ##############
+        self.acetone_str = []
+        for val in self.acetone:
+            if float(acetone) < 2:
+                self.acetone_str.append(1)
+            else:
+                self.acetone_str.append(val)
+        ###################################################################################        
+        
         new_sorted_etime = sorted(list(self.etime)) # This is the sorted version of self.log['Etime']
         new_sorted_dt = sorted(self.dt_etime)
         self.rev_sort_etime = list(reversed(new_sorted_etime)) 
@@ -98,7 +118,7 @@ class ResultsTable(object):
         results = []
         self.ref_list_inv = []
         for i in dt_list:
-            results.append(i + self.spacer + str(round(self.acetone[np.where(np.array(orig_dt_list) == i)[0][0]],1)) + ' ppm ' + np.array(self.log['Key'])[np.where(np.array(orig_dt_list) == i)[0][0]])
+            results.append(i + self.spacer + str(round(self.acetone_str[np.where(np.array(orig_dt_list) == i)[0][0]],1)) + ' ppm ' + np.array(self.log['Key'])[np.where(np.array(orig_dt_list) == i)[0][0]])
             self.ref_list_inv.append(np.where(np.array(orig_dt_list) == i)[0][0])
          
         self.ref_list = reversed(self.ref_list_inv)
