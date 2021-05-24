@@ -366,7 +366,7 @@ class MainView(ui.View):
             self.d9.alpha=  0    
     
     def main(self):
-        if self.results_table.y = = self.orig_console_loc:
+        if self.results_table.y == self.orig_console_loc:
             self.results_table.y = (self.results_table.y - self.app_console.height/2)/(2*self.xscaler)
         self.ble_status.alpha = 0.75 
         self.calc_icon.apha = 0.7
