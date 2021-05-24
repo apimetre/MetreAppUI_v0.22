@@ -62,13 +62,13 @@ def getPlot(bview, src, initial = True):
         sorted_notes =[]
         sorted_key = []
         for i in log['Etime']:
+            
             ref_val = np.where(np.array(log['Etime']) == i)[0][0]
             sorted_dt.append(log['DateTime'][ref_val])
             if log['Acetone'][ref_val] < 2:
-                sorted_ac.append(1)
+                sorted_ac.append(1.0)
             else:
                 sorted_ac.append(log['Acetone'][ref_val])
-            sorted_ac.append(log['Acetone'][ref_val])
             sorted_instr.append(log['Instr'][ref_val])
             sorted_sensor.append(log['Sensor'][ref_val])
             sorted_notes.append(log['Notes'][ref_val])
@@ -163,7 +163,6 @@ class BleDelegate(object):
 	#		pass
 	def select_time(self, sender):
 		self.time_selection = self.dt_source.items[sender.selected_row]
-		print(self.time_selection)
 		self.time_selector.title = 'Save Timezone' 
 		self.time_selector.bg_color = 'orange'
 		self.current_tz.text = 'Change default to ' + str(self.time_selection) + ' ?'
