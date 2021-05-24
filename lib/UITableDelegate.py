@@ -56,10 +56,10 @@ class ResultsTable(object):
         ############### This is for displaying '< 2' for acetone values < 2 ##############
         self.acetone_str = []
         for val in self.acetone:
-            if float(val) < 2:
-                self.acetone_str.append(1)
+            if float(acetone) < 2:
+                self.acetone_str.append("< 2")
             else:
-                self.acetone_str.append(val)
+                self.acetone_str.append(str(round(val,1)))
         ###################################################################################
         
         new_sorted_etime = sorted(list(self.etime)) # This is the sorted version of self.log['Etime']
@@ -77,7 +77,7 @@ class ResultsTable(object):
         results = []
         self.ref_list_inv = []
         for i in dt_list:
-            results.append(i + self.spacer + str(round(self.acetone_str[np.where(np.array(orig_dt_list) == i)[0][0]],1)) + ' ppm ' + np.array(self.log['Key'])[np.where(np.array(orig_dt_list) == i)[0][0]])
+            results.append(i + self.spacer + self.acetone_str[np.where(np.array(orig_dt_list) == i)[0][0]] + ' ppm ' + np.array(self.log['Key'])[np.where(np.array(orig_dt_list) == i)[0][0]])
             self.ref_list_inv.append(np.where(np.array(orig_dt_list) == i)[0][0])
          
         self.ref_list = list(reversed(self.ref_list_inv))
@@ -99,7 +99,7 @@ class ResultsTable(object):
         ############### This is for displaying '< 2' for acetone values < 2 ##############
         self.acetone_str = []
         for val in self.acetone:
-            if float(val) < 2:
+            if float(acetone) < 2:
                 self.acetone_str.append(1)
             else:
                 self.acetone_str.append(val)
@@ -118,7 +118,7 @@ class ResultsTable(object):
         results = []
         self.ref_list_inv = []
         for i in dt_list:
-            results.append(i + self.spacer + str(round(self.acetone_str[np.where(np.array(orig_dt_list) == i)[0][0]],1)) + ' ppm ' + np.array(self.log['Key'])[np.where(np.array(orig_dt_list) == i)[0][0]])
+            results.append(i + self.spacer + self.acetone_str[np.where(np.array(orig_dt_list) == i)[0][0]] + ' ppm ' + np.array(self.log['Key'])[np.where(np.array(orig_dt_list) == i)[0][0]])
             self.ref_list_inv.append(np.where(np.array(orig_dt_list) == i)[0][0])
          
         self.ref_list = reversed(self.ref_list_inv)
