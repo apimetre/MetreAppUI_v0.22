@@ -44,7 +44,6 @@ class PythonistaUartBleClient(object):
         self.event_queue.append(self.event)
 
     def did_disconnect_peripheral(self, p, error):
-        print("disconnected")
         self.event = {'src':self.src_name, 'ok':True, 
                         'status':'STATUS_DISCONNECTED_FROM_PERIPHERAL',  
                         'resp':{'peripheral':p.name, 'error':error}
