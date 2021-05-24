@@ -249,7 +249,7 @@ class MainView(ui.View):
                 # HERE is where you trigger the main function (i.e. after the button is pushed)
                 self.calc_icon.alpha = 0.7
                 
-                self.main(direct = True)
+                self.main(direct = False)
                 #self.connect_button.alpha = 0.7
                 #self.star_button.alpha = 0.7
                 return done
