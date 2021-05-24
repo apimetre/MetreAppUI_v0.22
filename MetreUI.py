@@ -72,7 +72,7 @@ class MainView(ui.View):
         # Console
         self.app_console = self.v['console']
         self.app_console.alpha = 0
-        self.orig_console_loc = self.app_console.y
+        #self.orig_console_loc = self.app_console.y
        
         # Ble connection
         self.star_button = self.v['start_button']
@@ -145,6 +145,12 @@ class MainView(ui.View):
         # Set up UI Functions
         self.getData()
         self.results_table = self.v['results_table']
+        self.orig_results_table_loc = self.results_table.y
+        print('this is the original results_table_loc')
+
+        print(self.orig_results_table_loc)
+        print('this is the original results table.y')
+        print(self.results_table.y)
         if self.xscaler > 2:
             self.results_table.width = self.results_table.width/(self.xscaler/2)
             self.results_table.x = self.star_button.x/2 + self.results_table.width/(4*2) - self.star_button.width/8
@@ -164,7 +170,7 @@ class MainView(ui.View):
         if DEBUG:
             print("this is the size of files to upload")
             print(len(self.files_to_upload))
-        if len(self.files_to_upload) >=2:
+        if len(self.files_to_upload) >=2: 
         
             self.app_console.text = 'Beginning Upload'
             self.main()
@@ -232,7 +238,8 @@ class MainView(ui.View):
         if not loaded:
             self.ble_status.text= 'Ready to Connect'
             ble_file_uploader = BleUploader(self.app_console, self.ble_status_icon, self.v,  self.xscaler, self.yscaler, APP_VERSION, DEBUG)
-            ready_status = ble_file_uploader.execute_transfer()
+            ready_status, orig_table_loc = ble_file_uploader.execute_transfer()
+            self.orig_results_table_loc = orig_table_loc
             
             if ready_status:
                 done = True
@@ -241,7 +248,8 @@ class MainView(ui.View):
 
                 # HERE is where you trigger the main function (i.e. after the button is pushed)
                 self.calc_icon.alpha = 0.7
-                self.main()
+                
+                self.main(direct = True)
                 #self.connect_button.alpha = 0.7
                 #self.star_button.alpha = 0.7
                 return done
@@ -280,15 +288,15 @@ class MainView(ui.View):
                 self.instr_icon.alpha = 0.1
                 self.connect_button.action = self.bleStatus()
                 self.connect_button.alpha =1
-                if self.results_table.y != self.orig_console_loc:
-                    self.results_table.y = (self.results_table.y - self.app_console.height/2)*2*self.xscaler
+               # if self.app_console.y != self.orig_console_loc:
+               #     self.app_console.y = self.orig_console_loc
 
             
         else:
             self.ble_icon_path = 'images/ble_disconnected.png'
             ble_icon.image = ui.Image.named(ble_icon_path)
-            if self.results_table.y != self.orig_console_loc:
-                self.results_table.y = (self.results_table.y - self.app_console.height/2)*2*self.xscaler
+           # if self.app_console.y != self.orig_console_loc:
+           #     self.app_console.y = self.orig_console_loc
             return done
             
         
@@ -367,13 +375,20 @@ class MainView(ui.View):
             self.d8.alpha=  0
             self.d9.alpha=  0    
     
-    def main(self):
-        if self.results_table.y == self.orig_console_loc:
-            self.results_table.y = (self.results_table.y - self.app_console.height/2)/(2*self.xscaler)
+    def main(self, direct = True):
+
         self.ble_status.alpha = 0.75 
         
         self.star_button.alpha = 0.75
         self.calc_icon.alpha = 0.75
+        if direct:
+            fixed_loc = self.results_table.y
+            print('going directly')
+            print(fixed_loc)
+        else:
+            fixed_loc = self.orig_results_table_loc
+            print('NOT going directly')
+            print(fixed_loc)
         global process_done
         process_done = False
         
@@ -396,10 +411,18 @@ class MainView(ui.View):
             print("these are the files in converted_files: " + str(files))
         numOfFiles = len(files)
         self.app_console.alpha = 1
+        print('BEFORE THE MOVE THE RESULTS_TABLE.Y IS ' + str(self.results_table.y))
         if numOfFiles >1:
+            if self.results_table.y == fixed_loc:           
+                self.results_table.y = self.results_table.y/(2*self.xscaler) + self.app_console.height/2
+                print('moving to ' + str(self.results_table.y))
             self.app_console.text = str(numOfFiles) + ' breath tests are ready to be processed. Beginning data processing...'
             self.d5.alpha = 0.75
         elif numOfFiles == 1:
+            if self.results_table.y == fixed_loc:           
+                self.results_table.y = self.results_table.y/(2*self.xscaler) + self.app_console.height/2
+                print('moving to ' + str(self.results_table.y))
+
             self.app_console.text = '1 breath test is ready to be processed. Beginning data processing...'
             self.d5.alpha = 0.75
         else:
@@ -487,8 +510,13 @@ class MainView(ui.View):
         time.sleep(2.5)
         self.app_console.alpha = 0
         self.app_console.text = ''
-        if self.results_table.y != self.orig_console_loc:
-            self.results_table.y = (self.results_table.y - self.app_console.height/2)*2*self.xscaler
+        print('this is the original results_table_loc')
+        print(self.orig_results_table_loc)
+        print('this is resutls_table_y')
+        print(self.results_table.y)
+        if self.results_table.y != fixed_loc:
+            self.results_table.y = fixed_loc
+            print('moving bc not equal the fixed_loc is ' + str(fixed_loc))
         self.connect_button.action = self.bleStatus()
         self.ble_status.alpha = 1
         
