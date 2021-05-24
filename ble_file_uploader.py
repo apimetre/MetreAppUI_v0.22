@@ -1,501 +1,548 @@
-# Python imports
-import ui
-import os
-import json
-import textwrap
-import shutil
-from collections import defaultdict
-import time
-import datetime as datetime
-from pytz import timezone
+DEBUG = False
 
+## Python imports
+import os
+import requests
+import shutil
+import numpy as np
+from io import BytesIO
+import datetime as datetime
+import time
+from pytz import timezone
+import json
+import threading
+import fnmatch
+import pprint
+import math
+from functools import partial
+import itertools
+import matplotlib.pyplot as plt
+from matplotlib.dates import num2date, date2num, num2epoch
 
 # Pythonista imports
-import cb
-import console
+import ui
 import Image
+import console
+from objc_util import on_main_thread
+import scene
+
 
 # Metre imports
-from lib.ParamsDb import ParamsDb
-from lib.ViewListView import ViewListView
-from lib.LineBuffer import LineBuffer
-from lib.PythonistaUartBleClient import PythonistaUartBleClient
-from lib.FileConverter import FileConverter
+import process_test
+from ble_file_uploader import BleUploader
+from lib.UISummaryDelegate import SummaryDelegate
+from lib.UIBleDelegate import BleDelegate, BokehDelegate, loading_html, updating_html, nolog_html, getPlot
+from lib.UIHelpDelegate import HelpDelegate
 from lib.UIFeatures import ConsoleAlert
+from lib.UITableDelegate import ResultsTable
+from app_single_launch import AppSingleLaunch
 
-# Global constants
+# Using single launch lock as suggested in
+# https://forum.omz-software.com/topic/5440/prevent-duplicate-launch-from-shortcut/7
+
+APP_VERSION = 'v0.22'
 
 
 
-class BleUploader():
-    def __init__(self, console_box_, ble_status_icon_, v_, xscale, yscale, version_id, debug_status):
-        self.console_box_ = console_box_
-        self.ble_status_icon_ = ble_status_icon_
-        self.v_ = v_
-        self.version_id = version_id
-        self.POPOVER_WIDTH = 500
-        self.SEND_TEXT_VIEW_HEIGHT = 30
-        self.PERIPHERAL_PREAMBLE = 'CIRCUITPY'
-        self.DEBUG = False
-        self.CONSOLE_WIDTH = 140
-        self.INDENT_STR = '        '
-        self.xscale = xscale
-        self.yscale = yscale
-        self.DEBUG = debug_status
+class MainView(ui.View):
+    def __init__(self):
+    #def __init__(self, app: AppSingleLaunch):
+        #self.app = app
+        self.name = "MetreAce Home"
+        self.flex = 'WH'
+        #self.tint_color = '#494949'
+        if DEBUG:
+            print('Screen size')
+            print(scene.get_screen_size())
+        self.view_x = scene.get_screen_size()[0]
+        self.view_y = scene.get_screen_size()[1]
         
+
         
-        self.instr_icon = self.v_['imageview']
-        self.d0 = self.v_['dot0']
-        self.d1 = self.v_['dot1']
-        self.d2 = self.v_['dot2']
-        self.d3 = self.v_['dot3']
-        self.d4 = self.v_['dot4']
+        # Setup of UI Features
         
-        # Global variables
-        self.in_buf =b''
+        self.v = ui.load_view('mainview')
+        self.v.frame = self.bounds
+        self.v.flex = 'WH'
+        
+        self.xscaler = self.view_x/320
+        self.yscaler = self.view_y/480
+
+        
+        # Console
+        self.app_console = self.v['console']
+        self.app_console.alpha = 0
+        #self.orig_console_loc = self.app_console.y
+       
+        # Ble connection
+        self.star_button = self.v['start_button']
+        self.ble_icon = self.v['ble_icon']
+        self.ble_status_icon = self.v['ble_status_icon']
+        self.ble_status = self.v['ble_status']
+        self.connect_button = self.v['connect_button']
+        ble_icon_path = 'images/ble_off.png'
+        self.ble_status_icon.image = ui.Image.named(ble_icon_path)
+        
+        # Set up icons
+        self.instr_icon = self.v['imageview']
+        dev_icon_path = 'images/MetreAceDev.png'
+        self.instr_icon.image = ui.Image.named(dev_icon_path)
+        self.calc_icon = self.v['button1']
+
+        # Instr chevrons
+        self.d0 = self.v['dot0']
+        self.d1 = self.v['dot1']
+        self.d2 = self.v['dot2']
+        self.d3 = self.v['dot3']
+        self.d4 = self.v['dot4']        
+        
+        # Cloud chevrons
+        self.d5 = self.v['dot5']
+        self.d6 = self.v['dot6']
+        self.d7 = self.v['dot7']
+        self.d8 = self.v['dot8']
+        self.d9 = self.v['dot9']
+        
+        # Version label
+        self.vlabel = self.v['vlabel']
+        self.vlabel.text = APP_VERSION
+        
+        #Center app title based on bounds
+        M_w =self.v['etre'].x - self.v['M'].x
+        etre_w = self.v['A'].x - self.v['etre'].x
+        A_w = self.v['ce'].x - self.v['A'].x
+        
+        self.v['etre'].x = self.star_button.x * self.xscaler + M_w * self.xscaler
+        self.v['M'].x = self.v['etre'].x - M_w
+        self.v['A'].x = self.v['etre'].x + etre_w 
+        self.v['ce'].x = self.v['A'].x + A_w
+        
+        # Setup
         self.cwd = os.getcwd()
+        on_main_thread(console.set_idle_timer_disabled)(True)
+        
+        
+        root_dir, metre_dir = self.cwd.split('MetreiOS')
+        if DEBUG:
+            print('This is self.cwd: ' + self.cwd)
+            print('This is root_dir: ' + root_dir)
+            
+        # Download Single Launch Lock if it's not already installed
+        check_path = root_dir + 'site-packages/single_launch.lock'
+        if os.path.exists(check_path):
+            if DEBUG:
+                print('single_launch.lock already exists')
+            else:
+                print('')
+        else:
+            shutil.copy(self.cwd + '/resources/single_launch.lock', check_path )
+            if DEBUG:
+                print('moved copy of single_launch.lock')
+            else:
+                print('')
+
+
+        # Set up UI Functions
+        self.getData()
+        self.results_table = self.v['results_table']
+        self.orig_results_table_loc = self.results_table.y
+        print('this is the original results_table_loc')
+
+        print(self.orig_results_table_loc)
+        print('this is the original results table.y')
+        print(self.results_table.y)
+        if self.xscaler > 2:
+            self.results_table.width = self.results_table.width/(self.xscaler/2)
+            self.results_table.x = self.star_button.x/2 + self.results_table.width/(4*2) - self.star_button.width/8
+
+        self.restable_inst = ResultsTable(self.v, self.results_table, self.xscaler, self.yscaler, self.cwd)
+        self.add_subview(self.v)
+        
+        # Implementation of navigation view/mainview
+        self.l = self.create_l_buttonItems('Settings','|','Results','|', 'Help')
+        self.left_button_items = self.l
+        self.files_to_upload = os.listdir(self.cwd + '/data_files/converted_files/')
+
+        # Process pre-uploaded tests (if available)
+
+        
+    def init_check(self):
+        if DEBUG:
+            print("this is the size of files to upload")
+            print(len(self.files_to_upload))
+        if len(self.files_to_upload) >=2: 
+        
+            self.app_console.text = 'Beginning Upload'
+            self.main()
+            self.star_button.alpha = 0.5
+            self.ble_status.text = ''
+        else:
+            self.ble_status.text = 'Ready to Connect'
+            self.bleStatus()
+            
+    def will_close(self) -> None:
+        self.app.will_close()
+
+    # This sets up main navigation view
+
+    def button_nav(self, sender):
+        def connect(a,b):
+            
+            if sender.title == a:
+                view_to_push = b
+                pushed_view = ui.load_view(view_to_push)
+                self.v.navigation_view.push_view(pushed_view)
+                    
+                if sender.title=='Settings':
+                    settings_page = pushed_view['view1']
+                    d_table = settings_page['dt_table']
+                    ble_delegate = BleDelegate(settings_page, d_table, self.cwd)
+                    
+                if sender.title=='Results':
+                    results_page = pushed_view['bokeh_bg']
+                    bview = ui.load_view('bokehview') 
+                    bokeh_delegate = BokehDelegate(pushed_view['webview1'], self.cwd)
+
+                if sender.title =='Help':
+                    help_page = pushed_view['toolbarview']
+                    hview = ui.load_view('toolbar')
+                    inst_page = pushed_view['online_instructions']
+                    qa_page = pushed_view['online_qa']
+                    recover_page = pushed_view['recover_button']
+                    help_delegate = HelpDelegate(hview, inst_page, qa_page, recover_page)
+
+                    
+        connect('Settings','file_view')
+        connect('Help','toolbar')
+        connect('Results','bokehview')
+
+
+    def create_l_buttonItems(self, *buttons):
+        items=[]
+        for b in buttons:
+            b=ui.ButtonItem(b)
+            b.tint_color='#494949'
+            b.action= self.button_nav
+            items.append(b)
+        return items
+
+# This sets up the bluetooth upload
+    @ui.in_background
+    def bleStatus(self):
+        self.star_button.alpha = 0.5
+        loaded = False
+        self.connect_button.alpha = 0
+        ble_icon_path = 'images/ble_disconnected.png'
+        self.ble_status_icon.image = ui.Image.named(ble_icon_path)
+    
+        if not loaded:
+            self.ble_status.text= 'Ready to Connect'
+            ble_file_uploader = BleUploader(self.app_console, self.ble_status_icon, self.v,  self.xscaler, self.yscaler, APP_VERSION, DEBUG)
+            ready_status, orig_table_loc = ble_file_uploader.execute_transfer()
+            self.orig_results_table_loc = orig_table_loc
+            
+            if ready_status:
+                done = True
+                #self.star_button.alpha = 0.25
+                self.ble_status.text = ''
+
+                # HERE is where you trigger the main function (i.e. after the button is pushed)
+                self.calc_icon.alpha = 0.7
+                
+                self.main(direct = True)
+                #self.connect_button.alpha = 0.7
+                #self.star_button.alpha = 0.7
+                return done
+            else:
+                self.app_console.text = 'No breath tests are ready to be processed'
+                if ble_file_uploader.py_ble_uart.peripheral:
+                    ble_file_uploader.py_ble_uart.peripheral = False
+                    self.ble_icon_path = 'images/ble_off.png'
+                    self.ble_status_icon.image = ui.Image.named(ble_icon_path)
+                    self.ble_status.text= 'Ready to Connect'
+                    self.star_button.alpha = 0.7
+                    self.connect_button.action = self.bleStatus()
+                else:
+                    if DEBUG:
+                        print("UI senses it is disconnected")
+                    time.sleep(0.5)
+                    self.app_console.text = 'Bluetooth connection lost. Reinsert mouthpiece to try again'
+                    ble_icon_path = 'images/ble_off.png'
+                    self.ble_status_icon.image = ui.Image.named(ble_icon_path)
+                    self.ble_status_icon.background_color = 'black'
+                    self.ble_status.text= 'Ready to Connect'
+                    self.star_button.alpha = 0.7
+                    self.connect_button.action = self.bleStatus()
+                    
+                ### THIS IS WHERE YOU SHOULD GIVE THE OPTION TO CONNECT AGAIN
+                self.d0.alpha = 0 
+                self.d1.alpha = 0
+                self.d2.alpha = 0
+                self.d3.alpha = 0
+                self.d4.alpha = 0                
+                self.d5.alpha = 0 
+                self.d6.alpha = 0
+                self.d7.alpha = 0
+                self.d8.alpha = 0
+                self.d9.alpha = 0
+                self.instr_icon.alpha = 0.1
+                self.connect_button.action = self.bleStatus()
+                self.connect_button.alpha =1
+               # if self.app_console.y != self.orig_console_loc:
+               #     self.app_console.y = self.orig_console_loc
+
+            
+        else:
+            self.ble_icon_path = 'images/ble_disconnected.png'
+            ble_icon.image = ui.Image.named(ble_icon_path)
+           # if self.app_console.y != self.orig_console_loc:
+           #     self.app_console.y = self.orig_console_loc
+            return done
+            
+        
+    
+    def getData(self):
+        
+        with open(self.cwd + '/log/log_003.json') as json_file:
+            self.log = json.load(json_file)
+        self.etime = []
+        self.weektime = []
+        for val in self.log['Etime']:
+                tval = datetime.datetime.fromtimestamp(int(val))
+                year, weeknum = tval.strftime("%Y-%U").split('-')
+                weekcalc = str(year) + '-W' + str(weeknum)
+                day_of_week = datetime.datetime.strptime(weekcalc + '-1', "%Y-W%W-%w")
+                self.weektime.append(day_of_week)
+                self.etime.append(tval)
+        self.acetone = np.array(self.log['Acetone'])
+        dtDateTime = []
+        for i in range(0, len(self.log['DateTime'])):
+            dtDateTime.append(datetime.datetime.strptime(self.log['DateTime'][i], '%Y-%m-%d %H:%M:%S'))
+        vectorized = []
+    
+        for i in range(0, len(self.acetone)):
+                vectorized.append([self.weektime[i], self.acetone[i], dtDateTime[i]])
+                self.varray = np.array(vectorized)
+        if len(self.acetone) <=0:
+            self.varray = []
+        try:
+            self.notes = self.log['Notes']
+        except:
+            self.notes = []
+            for i in range(0, len(self.log['Acetone'])):
+                self.notes.append('')
+            self.log['Notes'] = self.notes
+        try:
+            self.keys = self.log['Key']
+        except:
+            self.keys = []
+            for i in range(0, len(self.log['Acetone'])):
+                self.keys.append('')
+            self.log['Notes'] = self.notes
+            self.log['Key'] = self.keys
+            with open(self.cwd + "/log/log_003.json", "w") as outfile:
+                json.dump(self.log, outfile)        
+    ########################################
+    def blink(self):     
+        if self.d5.alpha == 0.75:
+            self.d6.alpha= 0.75
+            self.d7.alpha= 0
+            self.d8.alpha= 0
+            self.d9.alpha= 0
+            self.d5.alpha= 0
+        elif self.d6.alpha == 0.75:
+            self.d7.alpha=  0.75
+            self.d8.alpha=  0
+            self.d9.alpha= 0
+            self.d5.alpha=  0
+            self.d6.alpha=  0
+        elif self.d7.alpha == 0.75:
+            self.d8.alpha=  0.75
+            self.d9.alpha= 0
+            self.d5.alpha=  0
+            self.d6.alpha=  0
+            self.d7.alpha=  0
+        elif self.d8.alpha == 0.75:
+            self.d9.alpha=  0.75
+            self.d5.alpha= 0
+            self.d6.alpha=  0
+            self.d7.alpha=  0
+            self.d8.alpha=  0         
+        elif self.d9.alpha == 0.75:
+            self.d5.alpha=  0.75
+            self.d6.alpha= 0
+            self.d7.alpha=  0
+            self.d8.alpha=  0
+            self.d9.alpha=  0    
+    
+    def main(self, direct = True):
+
+        self.ble_status.alpha = 0.75 
+        
+        self.star_button.alpha = 0.75
+        self.calc_icon.alpha = 0.75
+        if direct:
+            fixed_loc = self.results_table.y
+            print('going directly')
+            print(fixed_loc)
+        else:
+            fixed_loc = self.orig_results_table_loc
+            print('NOT going directly')
+            print(fixed_loc)
+        global process_done
+        process_done = False
+        
+        def animate_bar():
+            for i in range(0, 200):
+                if process_done:
+                    break
+                ui.animate(self.blink, 0.1)
+                if DEBUG: print(i)
+                time.sleep(0.2)
+
+    
+        source_path = self.cwd + '/data_files/converted_files/'
+        all_src_files = os.listdir(source_path)
+        files = []
+        for file in all_src_files:
+            if ".gitkeep" not in file:
+                files.append(file)
+        if DEBUG:
+            print("these are the files in converted_files: " + str(files))
+        numOfFiles = len(files)
+        self.app_console.alpha = 1
+        print('BEFORE THE MOVE THE RESULTS_TABLE.Y IS ' + str(self.results_table.y))
+        if numOfFiles >1:
+            if self.results_table.y == fixed_loc:           
+                self.results_table.y = self.results_table.y/(2*self.xscaler) + self.app_console.height/2
+                print('moving to ' + str(self.results_table.y))
+            self.app_console.text = str(numOfFiles) + ' breath tests are ready to be processed. Beginning data processing...'
+            self.d5.alpha = 0.75
+        elif numOfFiles == 1:
+            if self.results_table.y == fixed_loc:           
+                self.results_table.y = self.results_table.y/(2*self.xscaler) + self.app_console.height/2
+                print('moving to ' + str(self.results_table.y))
+
+            self.app_console.text = '1 breath test is ready to be processed. Beginning data processing...'
+            self.d5.alpha = 0.75
+        else:
+            self.app_console.text = 'No breath tests are ready to be processed at this time'
+        time.sleep(3)
         
         try:
-            self.base_dir = self.cwd
-            os.listdir(self.base_dir + '/data_files/uploaded_files')
-               
-        except:
-            self.base_dir = self.cwd + '/MetreiOS/MetreAppUI_' + self.version_id 
-            os.listdir(self.base_dir + '/data_files/uploaded_files') 
-        
-
-        
-        self.event_queue = []
-        self.py_ble_buffer = LineBuffer('py_ble', self.event_queue,   log_path_name=self.base_dir +'/data_files/dat_files/', DEBUG=self.DEBUG)
-        # Initialize Bluetoooth
-        self.py_ble_uart = PythonistaUartBleClient('py_ble', self.event_queue,    self.PERIPHERAL_PREAMBLE, self.py_ble_buffer, DEBUG=self.DEBUG)
-        
-    def print_wrap(self, text, indent_str, len):
-        if self.DEBUG:
-            lines = textwrap.wrap(text, width=len, subsequent_indent=indent_str)
-            for line in lines:
-                print(line)
-
-    def blink(self):        
-        if self.d0.alpha == 0.75:
-            self.d1.alpha= 0.75
-            self.d2.alpha= 0
-            self.d3.alpha= 0
-            self.d4.alpha= 0
-            self.d0.alpha= 0
-        elif self.d1.alpha == 0.75:
-            self.d2.alpha=  0.75
-            self.d3.alpha=  0
-            self.d4.alpha= 0
-            self.d0.alpha=  0
-            self.d1.alpha=  0
-        elif self.d2.alpha == 0.75:
-            self.d3.alpha=  0.75
-            self.d4.alpha= 0
-            self.d0.alpha=  0
-            self.d1.alpha=  0
-            self.d2.alpha=  0
-        elif self.d3.alpha == 0.75:
-            self.d4.alpha=  0.75
-            self.d0.alpha= 0
-            self.d1.alpha=  0
-            self.d2.alpha=  0
-            self.d3.alpha=  0         
-        elif self.d4.alpha == 0.75:
-            self.d0.alpha=  0.75
-            self.d1.alpha= 0
-            self.d2.alpha=  0
-            self.d3.alpha=  0
-            self.d4.alpha=  0
-
-
-    def blink_dev(self):
-        if self.instr_icon.alpha == 0.25:
-            self.instr_icon.alpha = 0.5
-        elif self.instr_icon.alpha == 0.5:
-            self.instr_icon.alpha = 0.25
-    
-    def execute_transfer(self):
-        global in_buf
-        in_buf = b''
-        
-        cb.reset()
-        cb.set_central_delegate(self.py_ble_uart)
-        cb.scan_for_peripherals()
-        self.event_queue.append({'src':'py_ble', 'ack':'cb', 'ok':True,  'status':'STATUS_BLE_SCANNING_FOR_PERIPHERALS'})
-        while not self.py_ble_uart.peripheral:
-            if len(self.event_queue):
-                event = self.event_queue.pop()
-                if self.DEBUG:
-                    print(f"event: {event}")
-        if self.py_ble_uart.peripheral:
-            self.console_box_.alpha =1
-            self.console_box_.text = ("Connecting to MetreAce instrument")
-            #dev_icon_path = 'images/MetreAceDev.png'
-            self.d0.alpha = 0.75
-            #self.instr_icon.image = ui.Image.named(dev_icon_path)
-            self.instr_icon.alpha = 0.7
-            
-            
-        def is_dst(dt=None, tzone="UTC"):
-            if dt is None:
-                dt = datetime.datetime.utcnow()
-            t_zone = timezone(tzone)
-            timezone_aware_date = t_zone.localize(dt, is_dst=None)
-            return timezone_aware_date.tzinfo._dst.seconds
-        
-        def calc_utc_offset(timeval):
-            tz_dict = {"US/Eastern": 5,
-            "US/Central": 6,
-            "US/Mountain": 7,
-            "US/Pacific": 8,
-            "US/Alaska": 9,
-            "US/Hawaii": 10,
-            }
-            try:
-                with open('log/timezone_settings.json') as f:
-                    tzsource = json.loads(f)
-                    tz = tzsource['timezone']
-            except:
+            with open(self.cwd + '/log/timezone_settings.json') as f:
+                tzsource = json.loads(f)
                 tz = 'US/Pacific'
-            dt1 = datetime.datetime.fromtimestamp(timeval).astimezone(timezone(tz))
-            dst_term_sec = is_dst(datetime.datetime(int(dt1.year), int(dt1.month), int(dt1.day)), tzone="US/Pacific")
-            tz_factor = int(tz_dict[tz]) - dst_term_sec/3600
-            return int(tz_factor)
         
-                    
-        def cmd_fn(out_msg, cmd_type, cmd_counter = 0, to_counter = 0, warning = False, to_max = 80):
-            global in_buf
-            in_buf = (out_msg + '\n').encode('utf-8')
-            
-            while True:
-                
-                if self.py_ble_uart.peripheral:
-                    
-                    #ui.animate(self.blink, 0.1)
-                
-                    try:  
-                        ui.animate(self.blink, 0.1)
-                    # Sends commands to buffer
-                        if len(in_buf):
-                            if self.DEBUG:
-                                print('the length of in_buff is ', len(in_buf))
-                            in_chars = in_buf
-                            self.py_ble_buffer.buffer(in_chars)
-                            in_buf = ''
-                        # if events then process them
-                        while len(self.event_queue) and self.py_ble_uart.peripheral:
-                            if self.DEBUG:
-                                print('processing events')
-                            event = self.event_queue.pop()
-                         
-                            if 'post' in event:
-                                response = json.loads(event['post'])
-                                if 'cmd' in response:
-                                    try:
-                                        self.py_ble_uart.write((event    ['post']+'\n').encode())
-                                                            # print(f"event: {event}")
-                                        self.print_wrap(f"event: {event}",   self.INDENT_STR, self.CONSOLE_WIDTH)
-                                        if self.DEBUG:
-                                            print('sent a post cmd')
-                                        
-                                        continue
-                                    except:
-                                        resp_string = "Connecting"
-                                        break
-            
-                                else:
-                    
-                                    if self.DEBUG:
-                                        print('cmd not in post')
-                                    try:
-                                        if self.DEBUG:
-                                            print('printing event response')
-                                        self.print_wrap(f"event: {response}",    self.INDENT_STR, self.CONSOLE_WIDTH)
-                                        if cmd_type in response['ack']:
-                                            return response['resp'], cmd_counter
-                                        else:
-                                            continue
-                                    except:
-                                        if self.DEBUG:
-                                            print('could not get event response')
-                                        continue
-                            else:
-                                if self.DEBUG:
-                                    print('No post in event')
-                                self.print_wrap(f"event: {event}", self.INDENT_STR,   self.CONSOLE_WIDTH)
-            
-                        
-                    except KeyboardInterrupt as e:
-                        cb.reset()
-                        print(f"Ctrl-C Exiting: {e}")
-                        break
-                    time.sleep(0.2)
-                    ui.animate(self.blink, 0.1)
-                    cmd_counter = cmd_counter + 1
-                    to_counter = to_counter + 1
-                    if self.DEBUG:
-                        print('cmd_counter', cmd_counter)
-                    if warning and to_counter > to_max:
-                        self.console_box_.text = "Ooops. MetreAce needs to be restarted. \n Eject mouthpiece, close the phone app, and try again"
-                        break
-                    
-                else:
-                    resp_string = "NOT connected"
-                    return resp_string, cmd_counter
-    
-            
-        time.sleep(1)
-        if self.py_ble_uart.peripheral:
-            try:
-                self.v_['ble_status'].text = ''
-                print(self.console_box_.height)
-                self.v_['results_table'].y = self.v_['results_table'].y/(2*self.xscale) + self.console_box_.height/2
-                #self.console_box_.text = "Connected"
-                self.d0.alpha = 0.75
-                if self.DEBUG:
-                    print('will be using ' + self.cwd + '/data_files/dat_files/ as current working directory for writing log files')
-                global counter
-                counter = 0
-                time.sleep(0.2)
-                connect_msg_txt =json.dumps({"cmd":"set_ble_state","active":True})
-                cmd_fn(connect_msg_txt, "set_ble_state")
-    
-                ble_icon_path = 'images/ble_connected.png'
-                self.ble_status_icon_.image = ui.Image.named(ble_icon_path)
-                self.ble_status_icon_.background_color = "white"
-            
-            
-                #### Set the time and timezone offset (account for DST)
-                time.sleep(0.2)
-                current_time = int(time.time())
-                
-                out_msg00 =json.dumps({"cmd": "set_time","time": str(current_time)})
-                r00, no_counter = cmd_fn(out_msg00, "set_time")
-                
-                # Here is command to set timezone/DST
-                offset_hrs = calc_utc_offset(current_time)
-                time.sleep(2)
-                out_msg0 =json.dumps({"cmd": "set_time_offset","offset": str(offset_hrs)})
-                r0, no_counter = cmd_fn(out_msg0, "set_time_offset")
-                self.console_box_.text = ''
-                self.v_['ble_status'].text = 'Connected'
-                
-    
-                time.sleep(0.5)
-                out_msg1 =json.dumps({"cmd": "listdir","path": "/sd"})
-                r1, no_counter = cmd_fn(out_msg1, "listdir",  warning = True, to_max = 120)
-                list_of_dirs = r1['dir']
-                file_sizes = r1['stat']
-            except:
-                 ConsoleAlert('Connection Error! Remove Mouthpiece, Close App, Try Again!', self.v_)
-                 ble_icon_path = 'images/ble_off.png'
-                 self.ble_status_icon_.image = ui.Image.named(ble_icon_path)
-                 self.ble_status_icon_.background_color = 'black'
-                 #out_msg2 =json.dumps({"cmd": "disconnect_ble"})
-                 #rstring, no_counter = cmd_fn(out_msg2)
-                 return False
-            self.console_box_.text = str(list_of_dirs)
+        
+        except:
+                tz = 'US/Pacific'
+        
+        for file in files:
+               if fnmatch.fnmatch(file, '*.json'):
 
-            file_list = []
-            for file in list_of_dirs:
-                if file.startswith('.'):
-                    continue
-                elif file.endswith('.bin'):
-                    file_list.append(file)
-              
-        # HAVE A MESSAGE IF NO FILES READY TO BE UPLOADED
-            self.ble_status_icon_.background_color = 'orange'
-            self.v_['ble_status'].alpha = 0.5
-            self.console_box_.text = 'Found ' + str(len(file_list)) + ' test files on your MetreAce'
-            time.sleep(0.5)
-            
-            out_msg_text =json.dumps({"cmd":"oled", "text":"Uploading..."})
-            cmd_fn(out_msg_text, "oled", warning = True)
-                                      
-            FLAG = False
-            file_wrongsize = []
-            first_alert = True
-            for file in list_of_dirs:
-                
-                timeout_counter = 1
-                if file.startswith('._'):
-                    if self.DEBUG:
-                        print('I SEE ' + file)
-                    out_msg_del_e =json.dumps({"cmd": "remove", "path":     "/sd/" + file})
-                    r_del, counter = cmd_fn(out_msg_del_e, "remove", warning = True, to_max = 150)
-                elif file.endswith(('.bin', '.json')):
-                    if "device" in file:
-                        if self.DEBUG:
-                            print('I SEE ' + file)
-                            print('Skipping over ' + file)
-                        continue
-                    elif "params" in file:
-                        if self.DEBUG:
-                            print('I SEE ' + file)
-                            print('Skipping over ' + file)
-                        continue
-                    else:
-                        if self.DEBUG:
-                            print('I SEE ' + file)
-                        file_ix = list_of_dirs.index(file)
-                        file_size = file_sizes[file_ix]
-                        try:
-                            self.console_box_.text =  'Fetching ' + str(file_list.index(file) + 1) + ' out of ' + str(len(file_list)) + ' test files from your MetreAce'
-                        except:
-                            pass
-                        if file.endswith('.bin'):
-                            counter = 1
-                        filename, ext = file.split('.')
-                        if int(filename) < 1614306565 and first_alert:
-                            ConsoleAlert('Warning: May need to replace clock battery!', self.v_)
-                            first_alert = False
-                        
-                        out_msg =json.dumps({"cmd": "ble_get_file", "path":     "/sd/" + file})
-                        in_buf = (out_msg + '\n').encode('utf-8')
-                        result_resp = []
-                        while self.py_ble_uart.peripheral:
-                            try:
-                                if len(in_buf):
-                                    in_chars = in_buf
-                                    self.py_ble_buffer.buffer(in_chars)
-                                    in_buf = ''
-                                if len(self.event_queue):
-                                    event = self.event_queue.pop()
+                   dt = datetime.datetime.fromtimestamp(int(file.split('-')[0])).astimezone(timezone(tz)).strftime('%b %d, %Y, %I:%M %p')
+                   ui.animate(self.blink, 0.1)
+                   if DEBUG:
+                       print('Beginning Analysis of test from ' + dt)
+                   json_path = source_path + '/'+ file
+                   process_done = False
+                   with open(json_path) as f:
+                       data_dict = json.load(f)
+                   try:
 
-                                    if 'post' in event:
-                                        try:
-                                            response = json.loads(event['post'])
-                                            if 'cmd' in response:
-                                                self.py_ble_uart.write((event    ['post']+'\n').encode())
-                                                self.print_wrap(f"cmd_event: {event}",   self.INDENT_STR, self.CONSOLE_WIDTH)
-                                            else:
-                                                self.print_wrap(f"no_cmd_event: {response}",    self.INDENT_STR, self.CONSOLE_WIDTH)
-                                                if response['ok']:
-                                                    try:
-                                                         result_resp.append(str(response['resp']))
-                                                         self.print_wrap(f"resp_event: {response}",   self.INDENT_STR, self.CONSOLE_WIDTH)
-                                                    except:
-                                                        result_resp.append(str(response['ack']))
-                                                        self.print_wrap(f"ack_event: {response}",   self.INDENT_STR, self.CONSOLE_WIDTH)
-                                                else:
-                                                    if self.DEBUG:
-                                                        print("RESPONSE IS NOT OKAY")
-                                                    break
-                                        except:
-                                            pass
-    
-                                    else:
-                                        if self.DEBUG:
-                                            print(str(event))
-                                        #response = json.loads(str(event))
-                                        if event['ok']:
-                                           self.print_wrap(f"event: {event}",   self.INDENT_STR, self.CONSOLE_WIDTH)
-                                           pass
-                                        else:
-                                           FLAG = True
-                                           self.print_wrap(f"event: {event}",    self.INDENT_STR, self.CONSOLE_WIDTH)
-                                           break
-                                        
-                                time.sleep(0.2)
-                                ui.animate(self.blink, 0.1)
-                                counter = counter + 1
-                                timeout_counter = timeout_counter + 1
-                                if timeout_counter > 2000:
-                                    self.console_box_.text = "One of your tests could not be processed"
-                                    break
-                                
-                            except KeyboardInterrupt as e:
-                                cb.reset()
-                                print(f"Ctrl-C Exiting: {e}")
-                                break
-                           
-                            if "{'file_path': './result.bin'}" in result_resp:
-                                if self.DEBUG:
-                                    print('ENTERING TRANSFER AND REMOVAL ATTEMPT')
-                               
-                                try:
-                                    shutil.move('./result.bin', self.base_dir + '/data_files/uploaded_files/' + file)
-                                    upload_size = os.stat(self.base_dir + '/data_files/uploaded_files/' + file)[6]
-                                    if self.DEBUG:
-                                        print('Sent move command')
-                                    if upload_size == file_size:
-                                        if self.DEBUG:
-                                            print('upload and file size are the same size')
-                                        out_msg_del =json.dumps({"cmd": "remove", "path":"/sd/" + file})
-                                        r_del, counter = cmd_fn(out_msg_del, "remove",cmd_counter = counter, warning = True)  
-                                        if self.DEBUG:
-                                            print('Sent remove command here')
-                                    else:
-                                        if self.DEBUG:
-                                            print('FILE IS THE WRONG SIZE')
-                                        size_diff = file_size - upload_size
-                                        file_wrongsize.append(file)
-                                        file_wrongsize.append(size_diff)
-                                        out_msg_del =json.dumps({"cmd": "remove", "path":"/sd/" + file})
-                                        r_del, counter = cmd_fn(out_msg_del, "remove", cmd_counter = counter, warning = True)
-                                    
-                                    if file.endswith('bin'):
-                                        counter = counter + 1
-                                    
-                                        break 
-                                        # No break and no continue makes it exit and not remove the bin file
-                                    elif file.endswith('json'):
-                                        pass
-                                        
-                                except:
-                                    if self.DEBUG:
-                                        print('BROKE OUT OF TRANSFER AND REMOVAL ATTEMPT')
-                                    break
-                        if FLAG:
-                           counter = 0
-                           cb.reset()
-                           return False
-                       
-                else:
-                    continue
-            # Now use FileConverter
-            fc = FileConverter(self.console_box_, file_wrongsize)
-            cwd = os.getcwd()
-            if self.DEBUG:
-                print('THIS IS THE CURRENT DIR: ' + cwd)
-                print('THIS IS SELF.BASEDIR: ' + self.base_dir)
-
-            conversion_status = fc.match_files(self.base_dir + '/data_files/uploaded_files', self.base_dir + '/data_files/processed_files', self.base_dir + '/data_files/converted_files', self.base_dir + '/data_files/unpaired_files')
-            self.console_box_.text = 'Transfer of ' + str(len(file_list)) + ' out of ' + str(len(file_list)) + ' test files complete'
+                       data_dict_to_send = process_test.process(data_dict, dt, DEBUG)
+                       url = 'https://us-central1-metre3-1600021174892.cloudfunctions.net/metre-7500'
+                       data_dict_to_send['App_Version'] = APP_VERSION
+                       json_text = json.dumps(data_dict_to_send)
+                       self.app_console.text = 'Uploading and interpreting results from test from your ' + dt +' test. This may take a few moments...'
+                       pt = threading.Thread(target = animate_bar) # don't do this unless u start a parallel thread to send request
+                       pt.start()
+                       if DEBUG:
+                           print('sending to cloud')
+                       start = time.time()
+                       response = requests.post(url, files = [('json_file', ('test.json', json_text, 'application/json'))])
+                       process_done = True
+                       elapsedtime = time.time()-start
+                       if DEBUG: 
+                           print('received response--response time ' + str(elapsedtime))
+                       response_json = json.loads(response.text)
+                       pt.join()
+                       process_done = True
+                       self.app_console.text = 'Results from ' + dt + ': ' + response_json['pred_content']
+                       if DEBUG:
+                            print(response_json['pred_content'])
+                            print(response_json)
+                       newlog = {'Etime': response_json['refnum'],
+                                  'DateTime': response_json['DateTime'],
+                                  'Acetone': float(response_json['Acetone']),
+                                  'Sensor': response_json['sensor'],
+                                  'Instr': response_json['instrument'],
+                                  'Notes': '',
+                                  'Key': ''}
+                       for key, value in self.log.items():
+                          self.log[key].append(newlog[key])
+                       with open(self.cwd + "/log/log_003.json", "w") as outfile:
+                          json.dump(self.log, outfile)
+                       self.getData()
+                       if DEBUG:
+                          print(self.acetone)
+                       self.results_table = self.v['results_table']
+                       self.restable_inst.update_table()                        
+                   except:
+                       self.app_console.text = 'The test from ' + dt + ' could not be processed.'
+                       time.sleep(1)
+                   shutil.move(source_path + file, self.cwd +'/data_files/processed_files/' + file)
+               else:
+                   continue
+               time.sleep(1)
             
-            self.ble_status_icon_.background_color = 'white'
-            self.v_['ble_status'].text = ''
-            self.d0.alpha =  0
-            self.d1.alpha =  0
-            self.d2.alpha =  0
-            self.d3.alpha =  0
-            self.d4.alpha =  0
-
-            self.instr_icon.alpha = 0.2
-            
-            try:
-                out_msg_txt =json.dumps({"cmd":"set_ble_state","active":False})
-                cmd_fn(out_msg_txt, "set_ble_state", warning = True, to_max = 15)
-            except:
-                if self.DEBUG:
-                    print('could not send disconnect command')
+        self.getData()
+        self.restable_inst.update_table()                                     
+        self.d5.alpha = 0
+        self.d6.alpha = 0
+        self.d7.alpha = 0
+        self.d8.alpha = 0
+        self.d9.alpha = 0
+        self.calc_icon.alpha = 0.2
+                                            
+        self.app_console.text = 'Test Processing and Upload Complete.'
+        time.sleep(2.5)
+        self.app_console.alpha = 0
+        self.app_console.text = ''
+        print('this is the original results_table_loc')
+        print(self.orig_results_table_loc)
+        print('this is resutls_table_y')
+        print(self.results_table.y)
+        if self.results_table.y != fixed_loc:
+            self.results_table.y = fixed_loc
+            print('moving bc not equal the fixed_loc is ' + str(fixed_loc))
+        self.connect_button.action = self.bleStatus()
+        self.ble_status.alpha = 1
+        
+        
+        #self.ble_status.text = 'CONNECT'
 
 
-                                     
-            self.console_box_.text = 'Disconnecting from MetreAce Instrument'
-            
-            try:          
-                out_msg2 =json.dumps({"cmd": "disconnect_ble"})
-                rstring, no_counter = cmd_fn(out_msg2, "disconnect_ble", warning = True, to_max = 15)
-            except:
-                if self.DEBUG:
-                    print('could not send disconnect command')
-                    ble_icon_path = 'images/ble_off.png'
-                    self.ble_status_icon_.image = ui.Image.named(ble_icon_path)
-                    self.ble_status_icon_.background_color = 'black'
-            ConsoleAlert('Eject Mouthpiece if not yet removed!', self.v_)
-            ble_icon_path = 'images/ble_off.png'
-            self.ble_status_icon_.image = ui.Image.named(ble_icon_path)
-            self.ble_status_icon_.background_color = 'black'
-            return conversion_status
+class NavView(ui.View):
+    def __init__(self, app: AppSingleLaunch):
+        self.app = app
+        self.tint_color =  '#494949'  
+        self.name = "MetreAce Nav"
+        self.flex = 'WH'
+        self.mainscript = MainView()
+        self.nav = ui.NavigationView(self.mainscript)
+
+        
+
+if __name__ == '__main__':
+    app = AppSingleLaunch("MetreAce Nav")
+    if not app.is_active():
+        nav_class = NavView(app)
+        nav_view = nav_class.nav
+        nav_view.tint_color =  '#494949'                                   
+        app.will_present(nav_view)
+        nav_view.present()
+        nav_class.mainscript.init_check()
+        self.connect_button.action = self.bleStatus()
+        self.ble_status.alpha = 1
