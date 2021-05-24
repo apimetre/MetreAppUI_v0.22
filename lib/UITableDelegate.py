@@ -56,7 +56,7 @@ class ResultsTable(object):
         ############### This is for displaying '< 2' for acetone values < 2 ##############
         self.acetone_str = []
         for val in self.acetone:
-            if float(acetone) < 2:
+            if float(val) < 2:
                 self.acetone_str.append(1)
             else:
                 self.acetone_str.append(val)
@@ -99,7 +99,7 @@ class ResultsTable(object):
         ############### This is for displaying '< 2' for acetone values < 2 ##############
         self.acetone_str = []
         for val in self.acetone:
-            if float(acetone) < 2:
+            if float(val) < 2:
                 self.acetone_str.append(1)
             else:
                 self.acetone_str.append(val)
