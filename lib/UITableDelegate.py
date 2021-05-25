@@ -158,6 +158,17 @@ class ResultsTable(object):
                         spacer = '  '
                 except:
                     spacer = ''
+            
+            
+            elif entry_to_add[0].isdigit():
+                try:
+                    if current_entry[-1] != '.':
+                        spacer = '. '
+                    else:
+                        spacer = ', '
+                except:
+                    spacer = ''
+                    
             else:
                 try:
                     if current_entry[-1] != ',':
@@ -183,7 +194,7 @@ class ResultsTable(object):
             self.tdialog['text_entry'].text = ''
         self.tdialog['text_entry'].end_editing()        
         self.update_table()
-        self.table.delegate.action = self.write_notes               
+        self.table.delegate.action = self.write_notes                           
     def replace_log_notes(self, sender):
         self.update_table()
         current_entry = self.log_entry
