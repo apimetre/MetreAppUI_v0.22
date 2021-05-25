@@ -44,7 +44,7 @@ class HelpDelegate(object):
         helpWindow.present()
         
     def qaView(self, sender):
-        qa_url = 'https://www.metre.ai/resources/metreui/qa'
+        qa_url = 'https://www.metre.ai/resources/metreui/q-a'
         qaWindow = ui.WebView()
         qaWindow.tint_color = 'red'
         self.hview.add_subview(qaWindow)
